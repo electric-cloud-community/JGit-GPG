@@ -11,8 +11,11 @@ import org.bouncycastle.openpgp.operator.PGPDigestCalculatorProvider
 import org.bouncycastle.openpgp.operator.bc.BcKeyFingerprintCalculator
 import org.bouncycastle.openpgp.operator.jcajce.JcaPGPDigestCalculatorProviderBuilder
 import org.bouncycastle.openpgp.operator.jcajce.JcePBESecretKeyDecryptorBuilder
+import org.eclipse.jgit.api.CreateBranchCommand
 import org.eclipse.jgit.api.Git
+import org.eclipse.jgit.api.errors.RefAlreadyExistsException
 import org.eclipse.jgit.lib.GpgSigner
+import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider
 
 import java.security.Security
 
@@ -38,14 +41,9 @@ class JGitGPG extends FlowPlugin {
         // Use this pre-defined method to check connection parameters
         try {
             // Put some checks here
-            def config = context.configValues
-            log.info(config)
-            // Getting parameters:
-            // log.info config.asMap.get('config')
-            // log.info config.asMap.get('desc')
-            // log.info config.asMap.get('endpoint')
-            // log.info config.asMap.get('credential')
-
+            initBouncyCastle()
+            def keyPair = extractPrivateKey()
+            log.info "Read key pair successfully: key ID ${Long.toHexString(keyPair.keyID).toUpperCase()}"
             // assert config.getRequiredCredential("credential").secretValue == "secret"
         } catch (Throwable e) {
             // Set this property to show the error in the UI
@@ -71,30 +69,17 @@ class JGitGPG extends FlowPlugin {
         initBouncyCastle()
         // Use this parameters wrapper for convenient access to your parameters
         CommitWithSignatureParameters sp = CommitWithSignatureParameters.initParameters(p)
-        //Armored key
-        def keyWithArmor = context.configValues.getRequiredCredential('gpg_credential')?.secretValue
-        def bytes = keyWithArmor.getBytes("US-ASCII")
-        InputStream raw = new ByteArrayInputStream(bytes)
-        InputStream decoded = PGPUtil.getDecoderStream(raw)
-        def fingerprintCalculator = new BcKeyFingerprintCalculator()
-        PGPSecretKeyRing keyRing = new PGPSecretKeyRing(decoded, fingerprintCalculator)
-        keyRing.secretKeys.each {
-            def keyId = Long.toHexString(it.keyID)
-            log.info "Found key ${keyId}"
-            log.info it.getUserIDs().join(", ")
-            log.info '----------'
-        }
-
-        def secretValue = context.configValues.getCredential('gpg_passphrase_credential')?.secretValue
-        def privateKey = extractPrivateKey(keyRing.getSecretKey(), secretValue.toCharArray())
-
-        PGPKeyPair pair = new PGPKeyPair(keyRing.publicKey, privateKey)
+        PGPKeyPair pair = extractPrivateKey()
 
         Git git = Git.init().setDirectory(new File(sp.repoPath)).call()
 
-
         if (sp.branch) {
-            git.branchCreate().setName(sp.branch).call()
+            try {
+                git.checkout().setCreateBranch(true).setName(sp.branch).call()
+            } catch (RefAlreadyExistsException e) {
+                git.checkout().setName(sp.branch).call()
+            }
+
         }
 
         def files = sp.files.split(/\n+/)
@@ -107,7 +92,17 @@ class JGitGPG extends FlowPlugin {
 
         GpgSigner signer = new ScmGpgSigner(pair)
         GpgSigner.setDefault(signer)
-        def revCommit = git.commit().setMessage("Test signed commit").setSign(true).call()
+
+        def userIds = pair.getPublicKey().getUserIDs().next()
+        def ids = userIds.split(/<|>/)
+        def name = ids.first()
+        def email = ids.last()
+
+        log.info "Using key ID: email ${email} and user name ${name}"
+
+        def revCommit = git.commit()
+            .setCommitter(name, email)
+            .setMessage(sp.commitMessage ?: 'Signed commit').setSign(true).call()
         log.info "Commit id: ${revCommit.getId()}"
 
         def signature = revCommit.getRawGpgSignature().encodeBase64().toString()
@@ -115,7 +110,12 @@ class JGitGPG extends FlowPlugin {
 
 
         if (sp.push) {
-            def pushRes = git.push().call()
+            def credential = context.configValues.getCredential('credential')
+            def remoteName = sp.remote ?: git.repository.getRemoteNames().first()
+            log.info "Pushing data to the remote $remoteName"
+            def pushRes = git.push().setRemote(remoteName).setCredentialsProvider(
+                new UsernamePasswordCredentialsProvider(credential.userName, credential.secretValue)
+            ).call()
 
             pushRes.each {
                 it.remoteUpdates.each { update ->
@@ -124,6 +124,28 @@ class JGitGPG extends FlowPlugin {
                 }
             }
         }
+    }
+
+
+    PGPKeyPair extractPrivateKey() {
+        def keyWithArmor = context.configValues.getRequiredCredential('gpg_credential')?.secretValue
+        def bytes = keyWithArmor.getBytes("US-ASCII")
+        InputStream raw = new ByteArrayInputStream(bytes)
+        InputStream decoded = PGPUtil.getDecoderStream(raw)
+        def fingerprintCalculator = new BcKeyFingerprintCalculator()
+        PGPSecretKeyRing keyRing = new PGPSecretKeyRing(decoded, fingerprintCalculator)
+        keyRing.secretKeys.each {
+            def keyId = Long.toHexString(it.keyID).toUpperCase()
+            log.info "Found key ${keyId}"
+            log.info it.getUserIDs().join(", ")
+            log.info '----------'
+        }
+
+        def secretValue = context.configValues.getCredential('gpg_passphrase_credential')?.secretValue
+        def privateKey = extractPrivateKey(keyRing.getSecretKey(), secretValue.toCharArray())
+
+        PGPKeyPair pair = new PGPKeyPair(keyRing.publicKey, privateKey)
+        return pair
     }
 
     // === step ends ===

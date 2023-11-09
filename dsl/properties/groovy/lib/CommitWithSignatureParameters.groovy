@@ -21,6 +21,14 @@ class CommitWithSignatureParameters {
     * Label: Push?, type: checkbox
     */
     boolean push
+    /**
+    * Label: Remote name, type: entry
+    */
+    String remote
+    /**
+    * Label: Commit message, type: entry
+    */
+    String commitMessage
 
     static CommitWithSignatureParameters initParameters(StepParameters sp) {
         CommitWithSignatureParameters parameters = new CommitWithSignatureParameters()
@@ -37,7 +45,13 @@ class CommitWithSignatureParameters {
         def push = sp.getParameter('push').value == "true"
         parameters.push = push
 
+        def remote = sp.getParameter('remote').value
+        parameters.remote = remote
+
+        def commitMessage = sp.getParameter('commitMessage').value
+        parameters.commitMessage = commitMessage
+
         return parameters
     }
 }
-// DO NOT EDIT THIS BLOCK ABOVE ^^^=== Parameters ends, checksum: 51734b8ffb299cb40bdbf58edb71e4a4 ===
+// DO NOT EDIT THIS BLOCK ABOVE ^^^=== Parameters ends, checksum: 02efd8245f36ac69c4cb7c8da8e561f5 ===

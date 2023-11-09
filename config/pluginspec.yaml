@@ -1,0 +1,86 @@
+pluginInfo:
+  # This is default sample specification
+  # Feel free to change it
+  # Call pdk showdoc pluginspec to see the list of available fields and their description
+  pluginName: 'JGit-GPG'
+  version: '1.0.0'
+  description: 'Sample plugin description'
+  author: 'Polina Shubina'
+  supportUrl: 'none'
+  category: 'Version control'
+  shell: 'ec-groovy'
+
+# Plugin configuration description
+configuration:
+  # This is a shell used for checking connection
+  shell: 'ec-groovy'
+  # A script for checking connection will be generated
+  checkConnection: 'true'
+  # A set of fields will be added to process debug level in the configuration
+  hasDebugLevel: true
+  parameters:
+  -
+    name: config
+    documentation: The name for the created configuration
+    required: true
+    type: entry
+    label: Configuration Name
+  - name: desc
+    documentation: Description for the configuration
+    required: false
+    type: entry
+    label: Description
+  - name: credential
+    documentation: Username & token for authoring commits
+    required: true
+    type: credential
+    label: Credential
+
+  - name: gpg_credential
+    keyLabel: Private Key
+    credentialType: key
+    hideUserNameField: true
+    type: credential
+    label: GPG private key
+
+  - name: gpg_passphrase_credential
+    hideUserNameField: true
+    type: credential
+    credentialType: secret
+    label: GPG key passphrase
+    keyLabel: GPG key passphrase
+
+
+procedures:
+- name: Commit with signature
+  description: Commit and sign
+  # configuration field will be generated automatically
+  hasConfig: true
+  parameters:
+  - name: repoPath
+    documentation: Path to the repository
+    required: true
+    type: entry
+    label: Repository path
+  - name: branch
+    documentation: Branch name for the commit
+    required: true
+    type: entry
+    label: Branch name
+  - name: files
+    label: Files to add
+    required: true
+    type: textarea
+  - name: push
+    type: checkbox
+    label: Push?
+    checkedValue: true
+    uncheckedValue: false
+  - name: remote
+    type: entry
+    label: Remote name
+    required: false
+  - name: commitMessage
+    type: entry
+    required: false
+    label: Commit message
