@@ -30,6 +30,9 @@ configuration:
     required: false
     type: entry
     label: Description
+  - name: repoUrl
+    label: Remote repo for checking creds
+    required: false
   - name: credential
     documentation: Username & token for authoring commits
     required: true
@@ -64,7 +67,7 @@ procedures:
     label: Repository path
   - name: branch
     documentation: Branch name for the commit
-    required: true
+    required: false
     type: entry
     label: Branch name
   - name: files

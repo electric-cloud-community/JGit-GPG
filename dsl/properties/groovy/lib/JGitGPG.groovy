@@ -44,6 +44,15 @@ class JGitGPG extends FlowPlugin {
             initBouncyCastle()
             def keyPair = extractPrivateKey()
             log.info "Read key pair successfully: key ID ${Long.toHexString(keyPair.keyID).toUpperCase()}"
+            String repoUrl = context.configValues.getParameter('repoUrl')?.value
+            if (repoUrl) {
+                def credential = context.configValues.getRequiredCredential('credential')
+                def provider = new UsernamePasswordCredentialsProvider(credential.userName, credential.secretValue)
+                def result = Git.lsRemoteRepository().setCredentialsProvider(provider).setRemote(repoUrl).call()
+                result.each {
+                    log.info "Found remote ${it.name}"
+                }
+            }
             // assert config.getRequiredCredential("credential").secretValue == "secret"
         } catch (Throwable e) {
             // Set this property to show the error in the UI
@@ -79,7 +88,6 @@ class JGitGPG extends FlowPlugin {
             } catch (RefAlreadyExistsException e) {
                 git.checkout().setName(sp.branch).call()
             }
-
         }
 
         def files = sp.files.split(/\n+/)
@@ -140,8 +148,7 @@ class JGitGPG extends FlowPlugin {
             log.info it.getUserIDs().join(", ")
             log.info '----------'
         }
-
-        def secretValue = context.configValues.getCredential('gpg_passphrase_credential')?.secretValue
+        def secretValue = context.configValues.getCredential('gpg_passphrase_credential')?.secretValue ?: ''
         def privateKey = extractPrivateKey(keyRing.getSecretKey(), secretValue.toCharArray())
 
         PGPKeyPair pair = new PGPKeyPair(keyRing.publicKey, privateKey)
